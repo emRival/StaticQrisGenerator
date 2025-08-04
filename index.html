@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QRIS Statis ke Dinamis</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- jsQR library for reading QR codes from images -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <!-- QRCode.js library for generating QR codes -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      /* Custom style for the message box, replacing alert() */
+      .message-box {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: #fff;
+        border: 1px solid #ccc;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        border-radius: 8px;
+        z-index: 1000;
+        text-align: center;
+        max-width: 90%;
+      }
+      .message-box-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+      }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-blue-500 to-purple-600 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-xl shadow-2xl w-full container mx-auto md:flex md:gap-8">
+      <div class="input-section w-full md:w-1/2">
+        <h2 class="text-3xl font-extrabold text-gray-800 mb-8 text-center">Konversi QRIS Statis ke Dinamis</h2>
+        <p class="text-sm text-gray-600 mb-6 text-center">
+          Ubah QRIS statis Anda menjadi dinamis dengan nominal dan biaya layanan.
+        </p>
+
+        <!-- Upload QRIS Static Image Section -->
+        <div class="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <label for="qrisImage" class="block text-blue-800 text-sm font-semibold mb-3">
+            <span class="inline-block mr-2">⬆️</span> Upload Gambar QRIS Statis
+          </label>
+          <input
+            type="file"
+            id="qrisImage"
+            accept="image/*"
+            onchange="handleImage(event)"
+            class="block w-full text-sm text-blue-700
+                   file:mr-4 file:py-2 file:px-4
+                   file:rounded-full file:border-0
+                   file:text-sm file:font-semibold
+                   file:bg-blue-200 file:text-blue-800
+                   hover:file:bg-blue-300 transition-colors duration-200 cursor-pointer"
+          />
+        </div>
+
+        <!-- Hidden Canvas for QR Code Scanning -->
+        <canvas id="canvas" class="hidden"></canvas>
+        <!-- Result Text for Static QRIS Data -->
+        <div id="resultText" class="hidden bg-gray-100 p-3 rounded-md text-sm text-gray-700 break-words mb-6 border border-gray-200"></div>
+
+        <!-- Nominal Input Section -->
+        <div class="mb-6">
+          <label for="nominal" class="block text-gray-700 text-sm font-medium mb-3">Nominal Tagihan (Rp)</label>
+          <input
+            type="text"
+            id="nominal"
+            placeholder="Contoh: 10.000"
+            oninput="formatRupiahInput(this)"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-400 focus:border-blue-500 transition-all duration-200 text-lg font-semibold text-gray-800"
+          />
+        </div>
+
+        <!-- Service Fee Section -->
+        <div class="mb-6">
+          <label for="biaya" class="block text-gray-700 text-sm font-medium mb-3">Gunakan Biaya Layanan?</label>
+          <select
+            id="biaya"
+            onchange="toggleBiaya(this.value)"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-400 focus:border-blue-500 transition-all duration-200 bg-white cursor-pointer"
+          >
+            <option value="n">Tidak</option>
+            <option value="y">Ya</option>
+          </select>
+        </div>
+
+        <!-- Service Fee Details Form (hidden by default) -->
+        <div id="biayaForm" class="hidden mb-6 p-5 border border-gray-200 rounded-lg bg-gray-50 shadow-inner">
+          <div class="mb-4">
+            <label for="jenis" class="block text-gray-700 text-sm font-medium mb-3">Jenis Biaya</label>
+            <select
+              id="jenis"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-400 focus:border-blue-500 transition-all duration-200 bg-white cursor-pointer"
+            >
+              <option value="r">Rupiah (Jumlah Tetap)</option>
+              <option value="p">Persen (%)</option>
+            </select>
+          </div>
+          <div>
+            <label for="nilaiBiaya" class="block text-gray-700 text-sm font-medium mb-3">Nilai Biaya</label>
+            <input
+              type="number"
+              id="nilaiBiaya"
+              placeholder="Contoh: 2000 atau 2.5"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-400 focus:border-blue-500 transition-all duration-200 text-lg font-semibold text-gray-800"
+            />
+          </div>
+        </div>
+
+        <!-- Convert Button -->
+        <button
+          onclick="konversiQRIS()"
+          class="w-full bg-gradient-to-r from-blue-600 to-purple-700 text-white py-3 px-6 rounded-lg hover:from-blue-700 hover:to-purple-800 focus:outline-none focus:ring-4 focus:ring-blue-300 focus:ring-offset-2 transition-all duration-300 ease-in-out shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+        >
+          Konversi dan Generate QR Dinamis
+        </button>
+      </div>
+
+      <!-- Output Section for Dynamic QRIS -->
+      <div id="outputQR" class="hidden mt-8 md:mt-0 output-section w-full md:w-1/2 md:border-l md:border-gray-200 md:pl-8">
+        <div class="bg-green-50 p-6 rounded-lg border border-green-200 text-center shadow-lg">
+          <h3 class="text-2xl font-bold text-green-800 mb-4">QRIS Dinamis Anda:</h3>
+          <p id="nominalDisplay" class="text-3xl font-extrabold text-gray-900 mb-6 tracking-wide"></p>
+          <div id="qrcode" class="flex justify-center mb-6 p-2 bg-white rounded-lg shadow-md">
+            <!-- QR code will be rendered here -->
+          </div>
+          <p class="text-gray-700 font-medium mb-3"><strong>Data QR:</strong></p>
+          <div id="qrisText" class="bg-white p-4 rounded-md text-sm text-gray-800 break-words border border-gray-200 font-mono overflow-auto max-h-40 mb-6"></div>
+          <button
+            onclick="downloadQRIS()"
+            class="w-full bg-gradient-to-r from-green-600 to-teal-700 text-white py-3 px-6 rounded-lg hover:from-green-700 hover:to-teal-800 focus:outline-none focus:ring-4 focus:ring-green-300 focus:ring-offset-2 transition-all duration-300 ease-in-out shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+          >
+            Download QRIS Gambar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let qrisStatisData = ""; // Variable to store the static QRIS data extracted from the image
+      let generatedQRCodesCanvas = null; // To store the reference to the generated QR code canvas
+      // Global variables to store calculated amounts for download
+      let currentNominalAmount = 0;
+      let currentServiceFeeAmount = 0;
+      let currentTotalAmount = 0;
+      let currentFullQRIS = ""; // Store the full QRIS string for parsing merchant name
+
+      /**
+       * Shows a custom message box instead of alert().
+       * @param {string} message - The message to display.
+       * @param {boolean} isPrivacyNotice - True if this is the privacy notice popup.
+       */
+      function showMessageBox(message, isPrivacyNotice = false) {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'message-box-overlay';
+        document.body.appendChild(overlay);
+
+        // Create message box
+        const messageBox = document.createElement('div');
+        messageBox.className = 'message-box';
+        messageBox.innerHTML = `
+          <p class="text-lg font-medium mb-4">${message}</p>
+          <button id="messageBoxClose" class="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 ease-in-out">OK</button>
+        `;
+        document.body.appendChild(messageBox);
+
+        // Add event listener to close button
+        document.getElementById('messageBoxClose').onclick = () => {
+          document.body.removeChild(messageBox);
+          document.body.removeChild(overlay);
+        };
+
+        if (isPrivacyNotice) {
+            // Optional: Add a subtle animation for the privacy notice
+            messageBox.style.animation = 'fadeIn 0.3s ease-out';
+            overlay.style.animation = 'fadeIn 0.3s ease-out';
+        }
+      }
+
+      /**
+       * Toggles the visibility of the service fee input form.
+       * @param {string} val - The value of the 'Gunakan Biaya Layanan?' select element ('y' for yes, 'n' for no).
+       */
+      function toggleBiaya(val) {
+        document
+          .getElementById("biayaForm")
+          .classList.toggle("hidden", val !== "y");
+      }
+
+      /**
+       * Formats the input value as Rupiah.
+       * @param {HTMLInputElement} inputElement - The input element to format.
+       */
+      function formatRupiahInput(inputElement) {
+        let value = inputElement.value.replace(/[^0-9]/g, ''); // Remove non-numeric characters
+        if (value) {
+          value = parseInt(value, 10).toLocaleString('id-ID'); // Format as Rupiah
+          inputElement.value = value;
+        } else {
+          inputElement.value = '';
+        }
+      }
+
+      /**
+       * Handles the image file input, reads the QR code from it, and stores the data.
+       * @param {Event} event - The change event from the file input.
+       */
+      function handleImage(event) {
+        const file = event.target.files[0];
+        if (!file) {
+          return; // No file selected
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = new Image();
+          img.onload = function () {
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+            // Set canvas dimensions to match the image
+            canvas.width = img.width;
+            canvas.height = img.height;
+            // Draw the image onto the canvas
+            ctx.drawImage(img, 0, 0);
+            // Get image data from canvas for jsQR
+            const imageData = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+            // Scan for QR code
+            const code = jsQR(
+              imageData.data,
+              imageData.width,
+              imageData.height
+            );
+
+            if (code) {
+              qrisStatisData = code.data; // Store the extracted QRIS data
+              document.getElementById("resultText").textContent =
+                "QRIS Statis ditemukan:\n" + qrisStatisData;
+              document.getElementById("resultText").classList.remove("hidden");
+              showMessageBox("Gambar QRIS tidak dikirim ke server manapun. Pemrosesan dilakukan sepenuhnya di browser Anda.", true); // Privacy notice
+            } else {
+              showMessageBox("QR tidak terbaca. Pastikan gambar QRIS jelas dan tidak rusak.");
+              qrisStatisData = ""; // Clear previous data if scan fails
+              document.getElementById("resultText").classList.add("hidden");
+            }
+          };
+          img.src = e.target.result; // Set image source to the read file data
+        };
+        reader.readAsDataURL(file); // Read the file as a data URL
+      }
+
+      /**
+       * Calculates the CRC16 checksum for a given string.
+       * This function is crucial for QRIS data integrity.
+       * @param {string} str - The input string to calculate CRC16 for.
+       * @returns {string} The 4-character uppercase hexadecimal CRC16 checksum.
+       */
+      function CRC16(str) {
+        let crc = 0xffff; // Initial CRC value
+        for (let i = 0; i < str.length; i++) {
+          crc ^= str.charCodeAt(i) << 8; // XOR with character code shifted left by 8 bits
+          for (let j = 0; j < 8; j++) {
+            if ((crc & 0x8000) !== 0) { // Check if MSB is set
+              crc = (crc << 1) ^ 0x1021; // Shift left and XOR with polynomial
+            } else {
+              crc <<= 1; // Just shift left
+            }
+          }
+        }
+        return (crc & 0xffff).toString(16).toUpperCase().padStart(4, "0"); // Return as 4-char uppercase hex
+      }
+
+      /**
+       * Parses a QRIS string to extract the value of a specific tag.
+       * @param {string} qrisString - The full QRIS data string.
+       * @param {string} tag - The 2-character tag to search for (e.g., "59" for Merchant Name).
+       * @returns {string|null} The value of the tag, or null if not found.
+       */
+      function parseQrisTag(qrisString, tag) {
+          let index = 0;
+          while (index < qrisString.length) {
+              const currentTag = qrisString.substring(index, index + 2);
+              index += 2;
+              if (index + 2 > qrisString.length) break; // Ensure length field exists
+              const length = parseInt(qrisString.substring(index, index + 2), 10);
+              index += 2;
+              if (isNaN(length) || index + length > qrisString.length) break; // Ensure value exists and length is valid
+              const value = qrisString.substring(index, index + length);
+
+              if (currentTag === tag) {
+                  return value;
+              }
+              index += length;
+          }
+          return null; // Tag not found
+      }
+
+      /**
+       * Converts the static QRIS data to dynamic QRIS data based on user inputs
+       * (nominal and optional service fee) and generates a new QR code.
+       */
+      function konversiQRIS() {
+        if (!qrisStatisData) {
+          showMessageBox("QRIS statis belum diproses. Harap upload gambar QRIS statis terlebih dahulu.");
+          return;
+        }
+
+        const nominalInput = document.getElementById("nominal");
+        // Get raw numeric value from formatted input
+        const nominal = parseFloat(nominalInput.value.replace(/[^0-9]/g, ''));
+
+        if (isNaN(nominal) || nominal <= 0) {
+          showMessageBox("Masukkan nominal yang valid (angka lebih dari 0).");
+          nominalInput.focus();
+          return;
+        }
+
+        const pakaiBiaya = document.getElementById("biaya").value;
+        const jenisBiaya = document.getElementById("jenis").value;
+        const nilaiBiayaInput = document.getElementById("nilaiBiaya");
+        const nilaiBiaya = nilaiBiayaInput.value;
+
+        // Calculate amounts
+        currentNominalAmount = nominal;
+        currentServiceFeeAmount = 0;
+
+        // Start with the static QRIS data, removing the last 4 characters (CRC)
+        let qris = qrisStatisData.slice(0, -4);
+
+        // Change the transaction indicator from static (11) to dynamic (12)
+        // This is a common modification for dynamic QRIS
+        qris = qris.replace("010211", "010212");
+
+        // Split the QRIS string at "5802ID" to insert the amount and fee data
+        const parts = qris.split("5802ID");
+        if (parts.length < 2) {
+            showMessageBox("Format QRIS tidak dikenali atau tidak mengandung '5802ID'.");
+            return;
+        }
+
+        // Construct the amount field (Tag 54)
+        // Format: Tag (54) + Length (2 digits) + Value
+        let nominalString = nominal.toString();
+        let uang = "54" + nominalString.length.toString().padStart(2, "0") + nominalString;
+
+        // Add service fee data if selected
+        if (pakaiBiaya === "y") {
+          if (!nilaiBiaya || parseFloat(nilaiBiaya) < 0) {
+            showMessageBox("Masukkan nilai biaya layanan yang valid (angka tidak negatif).");
+            nilaiBiayaInput.focus();
+            return;
+          }
+          if (jenisBiaya === "r") { // Rupiah (fixed amount)
+            currentServiceFeeAmount = parseFloat(nilaiBiaya);
+            let feeString = nilaiBiaya.toString();
+            uang +=
+              "55020256" + // 55 (Tip or Convenience Fee Indicator) + 02 (Length of 02) + 02 (Fixed Amount) + 56 (Sub-tag for Fixed Amount)
+              feeString.length.toString().padStart(2, "0") +
+              feeString;
+          } else { // Persen (percentage)
+            currentServiceFeeAmount = currentNominalAmount * (parseFloat(nilaiBiaya) / 100);
+            let feeString = nilaiBiaya.toString(); // Store percentage value
+            uang +=
+              "55020357" + // 55 (Tip or Convenience Fee Indicator) + 02 (Length of 02) + 03 (Percentage) + 57 (Sub-tag for Percentage)
+              feeString.length.toString().padStart(2, "0") +
+              feeString;
+          }
+        }
+        currentTotalAmount = currentNominalAmount + currentServiceFeeAmount;
+
+
+        // Re-append the country code (5802ID)
+        uang += "5802ID";
+
+        // Reconstruct the QRIS string with the new amount and fee data
+        // This `finalQR` will now correctly contain the "6304" tag at its end
+        // if it was present in the original QRIS (from parts[1]).
+        const finalQR = parts[0] + uang + parts[1];
+
+        // Calculate the new CRC16 checksum for the modified string.
+        // The PHP code calculates CRC on a string that *includes* the 6304 tag.
+        const crc = CRC16(finalQR);
+
+        // Combine the final QRIS string with its new CRC.
+        // Only append the CRC value, as the "6304" tag is already part of `finalQR`.
+        currentFullQRIS = finalQR + crc; // Store the full QRIS string for parsing merchant name
+
+        // Display the raw dynamic QRIS data
+        document.getElementById("qrisText").innerText = currentFullQRIS;
+        // Display the nominal amount on UI with Rp prefix and formatting
+        document.getElementById("nominalDisplay").innerText = `Rp ${currentTotalAmount.toLocaleString('id-ID')}`;
+        // Show the output section
+        document.getElementById("outputQR").classList.remove("hidden");
+
+        // Generate the new QR code image on the canvas
+        const qrcodeContainer = document.getElementById("qrcode");
+        // Clear previous QR code
+        qrcodeContainer.innerHTML = ''; // Clear any existing QR code elements
+
+        // Create a new canvas element
+        const qrcodeCanvas = document.createElement('canvas');
+        qrcodeContainer.appendChild(qrcodeCanvas); // Append it to the container div
+        generatedQRCodesCanvas = qrcodeCanvas; // Store reference for download function
+
+        QRCode.toCanvas(
+          qrcodeCanvas, // Now passing the actual canvas element
+          currentFullQRIS, // The data to encode in the QR code
+          { width: 256, margin: 2, color: { dark: '#000000', light: '#ffffff' } }, // Options for QR code generation
+          function (error) {
+            if (error) {
+              console.error(error);
+              showMessageBox("Gagal membuat QR Code. Pastikan data QRIS valid.");
+            }
+          }
+        );
+      }
+
+      /**
+       * Draws the QR code and additional details (like nominal) onto a new canvas
+       * for a more aesthetic downloadable image.
+       * @param {HTMLCanvasElement} qrCanvas - The canvas containing the generated QR code.
+       * @param {string} fullQRISData - The complete QRIS string to parse merchant name from.
+       * @param {number} nominalAmount - The original nominal amount.
+       * @param {number} serviceFeeAmount - The calculated service fee amount.
+       * @param {number} totalAmount - The total amount to display.
+       * @returns {string} Data URL of the enhanced image.
+       */
+      function drawQRISImageWithDetails(qrCanvas, fullQRISData, nominalAmount, serviceFeeAmount, totalAmount) {
+          const outputImageWidth = 400;
+          const outputImageHeight = 700; // Increased height for more details
+
+          const newCanvas = document.createElement('canvas');
+          newCanvas.width = outputImageWidth;
+          newCanvas.height = outputImageHeight;
+          const ctx = newCanvas.getContext('2d');
+
+          // Background
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, outputImageWidth, outputImageHeight);
+
+          const padding = 20;
+          let currentY = padding;
+
+          // 1. Extract Merchant Name
+          const merchantName = parseQrisTag(fullQRISData, "59") || "Merchant Tidak Diketahui";
+
+          // Draw Merchant Name (Title)
+          ctx.font = 'bold 28px "Inter", sans-serif';
+          ctx.fillStyle = '#1f2937'; // gray-800
+          ctx.textAlign = 'center';
+          ctx.fillText(merchantName, outputImageWidth / 2, currentY + 28);
+          currentY += 50; // Space after merchant name
+
+          // Draw "Total Tagihan" label
+          ctx.font = 'normal 20px "Inter", sans-serif';
+          ctx.fillStyle = '#4b5563'; // gray-600
+          ctx.fillText('Total Tagihan:', outputImageWidth / 2, currentY + 20);
+          currentY += 25;
+
+          // Draw Total Amount
+          ctx.font = 'bold 36px "Inter", sans-serif';
+          ctx.fillStyle = '#1f2937'; // gray-900
+          ctx.fillText(`Rp ${totalAmount.toLocaleString('id-ID')}`, outputImageWidth / 2, currentY + 36);
+          currentY += 60; // Space before QR code
+
+          // Draw a separator line after total amount
+          ctx.strokeStyle = '#e5e7eb'; // gray-200
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(padding, currentY - 15);
+          ctx.lineTo(outputImageWidth - padding, currentY - 15);
+          ctx.stroke();
+          currentY += 15; // Adjust Y after separator
+
+          // Draw QR Code
+          const qrSize = qrCanvas.width; // Original QR code size (e.g., 256)
+          const targetQrWidth = outputImageWidth - (padding * 2); // Max width for QR
+          const scaleFactor = targetQrWidth / qrSize;
+          const scaledQrSize = qrSize * scaleFactor;
+
+          const qrX = (outputImageWidth - scaledQrSize) / 2;
+          const qrY = currentY;
+          ctx.drawImage(qrCanvas, qrX, qrY, scaledQrSize, scaledQrSize);
+          // Add a subtle border around the QR code
+          ctx.strokeStyle = '#e5e7eb'; // light gray border for QR code
+          ctx.lineWidth = 1;
+          ctx.strokeRect(qrX, qrY, scaledQrSize, scaledQrSize);
+          currentY += scaledQrSize + 30; // Space after QR code
+
+          // Draw Nominal and Biaya Layanan details
+          ctx.font = 'normal 18px "Inter", sans-serif';
+          ctx.fillStyle = '#4b5563'; // gray-600
+          ctx.textAlign = 'left';
+
+          const detailX = padding;
+          ctx.fillText(`Nominal: Rp ${nominalAmount.toLocaleString('id-ID')}`, detailX, currentY + 18);
+          currentY += 25;
+
+          if (serviceFeeAmount > 0) {
+              ctx.fillText(`Biaya Layanan: Rp ${serviceFeeAmount.toLocaleString('id-ID')}`, detailX, currentY + 18);
+              currentY += 25;
+          }
+
+          // Add a subtle footer or branding
+          ctx.font = 'italic 14px "Inter", sans-serif';
+          ctx.fillStyle = '#6b7280'; // gray-500
+          ctx.textAlign = 'center';
+          ctx.fillText('QRIS Dinamis Generator by Gemini', outputImageWidth / 2, outputImageHeight - padding);
+
+          return newCanvas.toDataURL('image/png');
+      }
+
+
+      /**
+       * Downloads the generated QRIS image as a PNG file.
+       */
+      function downloadQRIS() {
+        if (!generatedQRCodesCanvas || !currentFullQRIS) {
+          showMessageBox("Tidak ada QRIS dinamis yang dihasilkan untuk diunduh.");
+          return;
+        }
+
+        // Sanitize filename: remove dots from formatted nominal
+        const filename = `QRIS_Dinamis_Rp${currentTotalAmount.toLocaleString('id-ID').replace(/\./g, '')}.png`;
+
+        // Get the enhanced image data URL
+        const enhancedImageDataUrl = drawQRISImageWithDetails(
+            generatedQRCodesCanvas,
+            currentFullQRIS,
+            currentNominalAmount,
+            currentServiceFeeAmount,
+            currentTotalAmount
+        );
+
+        // Create a temporary link element
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = enhancedImageDataUrl; // Use the enhanced data URL
+        document.body.appendChild(link); // Append to body (required for Firefox)
+        link.click(); // Programmatically click the link to trigger download
+        document.body.removeChild(link); // Remove the link
+      }
+    </script>
+  </body>
+</html>
